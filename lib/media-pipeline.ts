@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 const execFileAsync = promisify(execFile);
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 const POLL = "https://gen.pollinations.ai/image/";
+const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY || process.env.POLLINATIONS_KEY || "";
 
 type RenderInput={prompt:string;voice?:string;webhook?:string};
 
@@ -23,8 +24,16 @@ function scenePrompts(prompt:string) {
 }
 
 async function fetchImage(prompt:string, file:string) {
-  const url=POLL+encodeURIComponent(prompt)+"?width=1080&height=1920&nologo=true";
-  const res=await fetch(url,{headers:{Accept:"image/*"}});
+  const query=new URLSearchParams({
+    width:"1080",
+    height:"1920",
+    nologo:"true"
+  });
+  if (POLLINATIONS_API_KEY) query.set("key",POLLINATIONS_API_KEY);
+  const url=POLL+encodeURIComponent(prompt)+"?"+query.toString();
+  const headers:Record<string,string>={Accept:"image/*"};
+  if (POLLINATIONS_API_KEY) headers.Authorization="Bearer "+POLLINATIONS_API_KEY;
+  const res=await fetch(url,{headers});
   if(!res.ok) throw err("scene-generation",`Scene image HTTP ${res.status}`,{url,status:res.status});
   const buf=Buffer.from(await res.arrayBuffer());
   if(!buf.length) throw err("scene-generation","Scene image was empty",{url});
