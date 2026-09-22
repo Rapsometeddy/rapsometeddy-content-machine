@@ -4,17 +4,38 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
-import ffmpegPath from "ffmpeg-static";
 
 const execFileAsync = promisify(execFile);
+
 async function resolveFfmpeg() {
   const configured = process.env.FFMPEG_PATH;
   if (configured) return configured;
 
-  if (!ffmpegPath) return "ffmpeg";
+  let bundledPath: string | undefined;
+  try {
+    // Resolve the external native package at runtime, not through Next webpack.
+    bundledPath = require("ffmpeg-static") as string;
+  } catch {}
 
-  // Vercel can bundle ffmpeg-static inside .next/server/chunks, where
-  // spawning it directly may fail. Copy it to /tmp and make it executable.
+  const candidates = [
+    bundledPath,
+    path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
+    "/var/task/node_modules/ffmpeg-static/ffmpeg"
+  ].filter((v): v is string => Boolean(v));
+
+  let source: string | undefined;
+  for (const candidate of candidates) {
+    try {
+      const stat = await fs.stat(candidate);
+      if (stat.isFile()) {
+        source = candidate;
+        break;
+      }
+    } catch {}
+  }
+
+  if (!source) return "ffmpeg";
+
   const target = path.join(os.tmpdir(), "rapsometeddy-ffmpeg");
   try {
     const stat = await fs.stat(target);
@@ -24,7 +45,7 @@ async function resolveFfmpeg() {
     }
   } catch {}
 
-  await fs.copyFile(ffmpegPath, target);
+  await fs.copyFile(source, target);
   await fs.chmod(target, 0o755);
   return target;
 }
