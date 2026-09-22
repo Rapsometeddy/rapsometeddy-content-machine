@@ -1,11 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Keep ffmpeg-static as a real server dependency instead of rewriting
-  // the native binary into a Next.js server chunk.
-  serverExternalPackages: ["ffmpeg-static"],
-  outputFileTracingIncludes: {
-    "/*": ["./node_modules/ffmpeg-static/ffmpeg"]
-  }
+  // Keep ffmpeg-static outside the Next.js webpack server bundle so the
+  // native executable remains a real file under node_modules at runtime.
+  serverExternalPackages: ["ffmpeg-static"]
 };
 
 module.exports = nextConfig;
