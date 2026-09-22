@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
+import ffmpegPath from "ffmpeg-static";
 
 const execFileAsync = promisify(execFile);
 
@@ -11,30 +12,15 @@ async function resolveFfmpeg() {
   const configured = process.env.FFMPEG_PATH;
   if (configured) return configured;
 
-  let bundledPath: string | undefined;
-  try {
-    // Resolve the external native package at runtime, not through Next webpack.
-    bundledPath = require("ffmpeg-static") as string;
-  } catch {}
-
-  const candidates = [
-    bundledPath,
-    path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg"),
-    "/var/task/node_modules/ffmpeg-static/ffmpeg"
-  ].filter((v): v is string => Boolean(v));
-
-  let source: string | undefined;
-  for (const candidate of candidates) {
-    try {
-      const stat = await fs.stat(candidate);
-      if (stat.isFile()) {
-        source = candidate;
-        break;
-      }
-    } catch {}
+  // ffmpeg-static is externalized by next.config.js, so this should resolve
+  // to the real file under node_modules in the Vercel Lambda.
+  const source = ffmpegPath;
+  if (!source) {
+    throw err("ffmpeg", "ffmpeg-static did not provide a binary path", {
+      cwd: process.cwd(),
+      nodePath: process.env.NODE_PATH || null
+    });
   }
-
-  if (!source) return "ffmpeg";
 
   const target = path.join(os.tmpdir(), "rapsometeddy-ffmpeg");
   try {
@@ -44,6 +30,16 @@ async function resolveFfmpeg() {
       return target;
     }
   } catch {}
+
+  try {
+    await fs.stat(source);
+  } catch (e: any) {
+    throw err("ffmpeg", "ffmpeg-static binary is not present in the deployed Lambda", {
+      source,
+      cwd: process.cwd(),
+      code: e?.code
+    });
+  }
 
   await fs.copyFile(source, target);
   await fs.chmod(target, 0o755);
