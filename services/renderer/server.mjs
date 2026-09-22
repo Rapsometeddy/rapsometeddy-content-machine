@@ -82,49 +82,35 @@ async function ffmpeg(args) {
 }
 
 async function buildVideo(dir, images) {
-  const clips = [];
+  const output = path.join(dir, "final.mp4");
 
-  for (let i = 0; i < images.length; i++) {
-    const clip = path.join(dir, "clip-" + i + ".mp4");
-    await ffmpeg([
-      "-y",
-      "-loop", "1",
-      "-i", images[i],
-      "-t", "3",
-      "-vf", "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,format=yuv420p",
-      "-r", "24",
-      "-an",
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "30",
-      clip
-    ]);
-    clips.push(clip);
+  const args = ["-y"];
+  for (const image of images) {
+    args.push("-loop", "1", "-t", "3", "-i", image);
   }
 
-  const list = path.join(dir, "clips.txt");
-  await fs.writeFile(list, clips.map(file => "file '" + file.replace(/'/g, "'\\''") + "'").join("\n"));
+  const concatInputs = images.map((_, i) => "[" + i + ":v]").join("");
+  const filter = concatInputs + "concat=n=" + images.length + ":v=1:a=0,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,format=yuv420p,fps=24[v]";
 
-  const silent = path.join(dir, "silent.mp4");
-  await ffmpeg([
-    "-y",
-    "-f", "concat",
-    "-safe", "0",
-    "-i", list,
+  args.push(
+    "-filter_complex", filter,
+    "-map", "[v]",
     "-f", "lavfi",
     "-i", "anullsrc=r=48000:cl=stereo",
     "-t", "21",
-    "-c:v", "copy",
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "30",
     "-c:a", "aac",
     "-b:a", "96k",
     "-shortest",
     "-movflags", "+faststart",
-    silent
-  ]);
+    output
+  );
 
-  return silent;
+  await ffmpeg(args);
+  return output;
 }
-
 async function sendTelegramVideo(chatId, file, caption) {
   if (!BOT_TOKEN) throw new Error("BOT_TOKEN is not configured on renderer");
   const form = new FormData();
