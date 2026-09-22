@@ -7,7 +7,27 @@ import { createHash } from "node:crypto";
 import ffmpegPath from "ffmpeg-static";
 
 const execFileAsync = promisify(execFile);
-const FFMPEG = process.env.FFMPEG_PATH || ffmpegPath || "ffmpeg";
+async function resolveFfmpeg() {
+  const configured = process.env.FFMPEG_PATH;
+  if (configured) return configured;
+
+  if (!ffmpegPath) return "ffmpeg";
+
+  // Vercel can bundle ffmpeg-static inside .next/server/chunks, where
+  // spawning it directly may fail. Copy it to /tmp and make it executable.
+  const target = path.join(os.tmpdir(), "rapsometeddy-ffmpeg");
+  try {
+    const stat = await fs.stat(target);
+    if (stat.isFile()) {
+      await fs.chmod(target, 0o755);
+      return target;
+    }
+  } catch {}
+
+  await fs.copyFile(ffmpegPath, target);
+  await fs.chmod(target, 0o755);
+  return target;
+}
 const POLL = "https://gen.pollinations.ai/image/";
 const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY || process.env.POLLINATIONS_KEY || "";
 
@@ -56,7 +76,7 @@ async function makeConcatList(files:string[],listFile:string) {
 }
 
 async function runFfmpeg(args:string[]) {
-  try { return await execFileAsync(FFMPEG,args,{timeout:55000,maxBuffer:4*1024*1024}); }
+  try { return await execFileAsync(await resolveFfmpeg(),args,{timeout:55000,maxBuffer:4*1024*1024}); }
   catch(e:any) {
     throw err("ffmpeg",e?.stderr || e?.message || "FFmpeg failed",{
       code:e?.code,stdout:e?.stdout,stderr:e?.stderr,
