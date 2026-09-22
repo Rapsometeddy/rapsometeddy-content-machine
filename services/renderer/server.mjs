@@ -66,70 +66,61 @@ async function downloadScene(prompt, file) {
   await fs.writeFile(file, bytes);
   return bytes.length;
 }
-
-async function ffmpeg(args) {
-  try {
-    return await execFileAsync("ffmpeg", args, {
-      timeout: 55_000,
-      maxBuffer: 4 * 1024 * 1024
-    });
-  } catch (e) {
-    const detail = e?.stderr || e?.message || "FFmpeg failed";
-    const error = new Error(detail);
-    error.code = e?.code;
-    throw error;
-  }
-}
-
-async function buildVideo(dir, images) {
-  const output = path.join(dir, "final.mp4");
-
-  const args = ["-y"];
-  for (const image of images) {
-    args.push("-loop", "1", "-t", "3", "-i", image);
-  }
-
-  const concatInputs = images.map((_, i) => "[" + i + ":v]").join("");
-  const filter = concatInputs + "concat=n=" + images.length + ":v=1:a=0,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,format=yuv420p,fps=24[v]";
-
-  args.push(
-    "-filter_complex", filter,
-    "-map", "[v]",
-    "-f", "lavfi",
-    "-i", "anullsrc=r=48000:cl=stereo",
-    "-t", "21",
-    "-c:v", "libx264",
-    "-preset", "veryfast",
-    "-crf", "30",
-    "-c:a", "aac",
-    "-b:a", "96k",
-    "-shortest",
-    "-movflags", "+faststart",
-    output
-  );
-
-  await ffmpeg(args);
-  return output;
-}
-async function sendTelegramVideo(chatId, file, caption) {
+async function sendTelegramPhoto(chatId, file, caption) {
   if (!BOT_TOKEN) throw new Error("BOT_TOKEN is not configured on renderer");
   const form = new FormData();
   form.append("chat_id", String(chatId));
-  form.append("video", new Blob([await fs.readFile(file)], {type:"video/mp4"}), "rapsometeddy.mp4");
-  form.append("supports_streaming", "true");
+  form.append("photo", new Blob([await fs.readFile(file)], {type:"image/png"}), "rapsometeddy.png");
   if (caption) form.append("caption", caption);
 
-  const response = await fetch("https://api.telegram.org/bot" + BOT_TOKEN + "/sendVideo", {
+  const response = await fetch("https://api.telegram.org/bot" + BOT_TOKEN + "/sendPhoto", {
     method:"POST",
     body:form
   });
   const result = await response.json();
   if (!response.ok || !result.ok) {
-    throw new Error("Telegram sendVideo failed: " + (result.description || response.status));
+    throw new Error("Telegram sendPhoto failed: " + (result.description || response.status));
   }
   return result;
 }
 
+async function render(body) {
+  const prompt = String(body.prompt || "Create a Rapsometeddy AI, tech and entrepreneurship visual.");
+  const chatId = body.telegramChatId;
+  if (!chatId) throw new Error("telegramChatId is required");
+
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "rapsometeddy-images-"));
+  const images = [];
+
+  try {
+    for (let i = 0; i < 7; i++) {
+      const file = path.join(dir, "scene-" + (i + 1) + ".png");
+      await downloadScene(
+        `${prompt}. Image ${i + 1} of 7. Vertical 9:16 social-media image, polished Rapsometeddy visual, consistent visual identity, no readable text.`,
+        file
+      );
+      images.push(file);
+    }
+
+    for (let i = 0; i < images.length; i++) {
+      await sendTelegramPhoto(
+        chatId,
+        images[i],
+        `🖼️ Rapsometeddy — image ${i + 1}/${images.length}`
+      );
+    }
+
+    return {
+      ok:true,
+      status:"images-sent",
+      count:images.length,
+      telegramMessageIds:[],
+      media:"images-only"
+    };
+  } finally {
+    await fs.rm(dir, {recursive:true, force:true}).catch(() => {});
+  }
+}
 async function render(body) {
   const prompt = String(body.prompt || "Create a cinematic Rapsometeddy AI, tech and entrepreneurship short.");
   const chatId = body.telegramChatId;
