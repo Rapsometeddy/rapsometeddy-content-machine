@@ -33,8 +33,16 @@ async function fetchImage(prompt:string, file:string) {
   const url=POLL+encodeURIComponent(prompt)+"?"+query.toString();
   const headers:Record<string,string>={Accept:"image/*"};
   if (POLLINATIONS_API_KEY) headers.Authorization="Bearer "+POLLINATIONS_API_KEY;
-  const res=await fetch(url,{headers});
-  if(!res.ok) throw err("scene-generation",`Scene image HTTP ${res.status}`,{url,status:res.status});
+  let res=await fetch(url,{headers});
+
+  // Pollinations current gateway can return 401 even when a key is configured.
+  // Fall back to the legacy image endpoint so rendering can continue.
+  if(res.status===401){
+    const legacyUrl="https://image.pollinations.ai/prompt/"+encodeURIComponent(prompt)+"?width=1080&height=1920&nologo=true&model=flux";
+    res=await fetch(legacyUrl,{headers:{Accept:"image/*"}});
+    if(!res.ok) throw err("scene-generation","Scene image HTTP "+res.status,{url:legacyUrl,status:res.status,primaryStatus:401});
+  }
+  if(!res.ok) throw err("scene-generation","Scene image HTTP "+res.status,{url,status:res.status});
   const buf=Buffer.from(await res.arrayBuffer());
   if(!buf.length) throw err("scene-generation","Scene image was empty",{url});
   await fs.writeFile(file,buf);
