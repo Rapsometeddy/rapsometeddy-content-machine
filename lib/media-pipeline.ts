@@ -1,157 +1,108 @@
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { createHash } from "node:crypto";
-import ffmpegPath from "ffmpeg-static";
 
-const execFileAsync = promisify(execFile);
+type RenderInput = {
+  prompt: string;
+  voice?: string;
+  webhook?: string;
+  telegramChatId?: string | number;
+};
 
-async function resolveFfmpeg() {
-  const configured = process.env.FFMPEG_PATH;
-  if (configured) return configured;
-
-  // ffmpeg-static is externalized by next.config.js, so this should resolve
-  // to the real file under node_modules in the Vercel Lambda.
-  const source = ffmpegPath;
-  if (!source) {
-    throw err("ffmpeg", "ffmpeg-static did not provide a binary path", {
-      cwd: process.cwd(),
-      nodePath: process.env.NODE_PATH || null
-    });
-  }
-
-  const target = path.join(os.tmpdir(), "rapsometeddy-ffmpeg");
-  try {
-    const stat = await fs.stat(target);
-    if (stat.isFile()) {
-      await fs.chmod(target, 0o755);
-      return target;
-    }
-  } catch {}
-
-  try {
-    await fs.stat(source);
-  } catch (e: any) {
-    throw err("ffmpeg", "ffmpeg-static binary is not present in the deployed Lambda", {
-      source,
-      cwd: process.cwd(),
-      code: e?.code
-    });
-  }
-
-  await fs.copyFile(source, target);
-  await fs.chmod(target, 0o755);
-  return target;
-}
-const POLL = "https://gen.pollinations.ai/image/";
-const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY || process.env.POLLINATIONS_KEY || "";
-
-type RenderInput={prompt:string;voice?:string;webhook?:string};
-
-function err(stage:string,message:string,extra:Record<string,unknown>={}) {
-  const e=new Error(message) as Error & {stage?:string;details?:unknown};
-  e.stage=stage; e.details=extra; return e;
-}
-
-function scenePrompts(prompt:string) {
-  return Array.from({length:7},(_,i)=>(
-    `${prompt}. Scene ${i+1} of 7. Cinematic vertical 9:16 composition, consistent character/world, no text, social-video visual.`
-  ));
-}
-
-async function fetchImage(prompt:string, file:string) {
-  const query=new URLSearchParams({
-    width:"1080",
-    height:"1920",
-    nologo:"true"
-  });
-  if (POLLINATIONS_API_KEY) query.set("key",POLLINATIONS_API_KEY);
-  const url=POLL+encodeURIComponent(prompt)+"?"+query.toString();
-  const headers:Record<string,string>={Accept:"image/*"};
-  if (POLLINATIONS_API_KEY) headers.Authorization="Bearer "+POLLINATIONS_API_KEY;
-  let res=await fetch(url,{headers});
-
-  // Pollinations current gateway can return 401 even when a key is configured.
-  // Fall back to the legacy image endpoint so rendering can continue.
-  if(res.status===401){
-    const legacyUrl="https://image.pollinations.ai/prompt/"+encodeURIComponent(prompt)+"?width=1080&height=1920&nologo=true&model=flux";
-    res=await fetch(legacyUrl,{headers:{Accept:"image/*"}});
-    if(!res.ok) throw err("scene-generation","Scene image HTTP "+res.status,{url:legacyUrl,status:res.status,primaryStatus:401});
-  }
-  if(!res.ok) throw err("scene-generation","Scene image HTTP "+res.status,{url,status:res.status});
-  const buf=Buffer.from(await res.arrayBuffer());
-  if(!buf.length) throw err("scene-generation","Scene image was empty",{url});
-  await fs.writeFile(file,buf);
-  return {file,bytes:buf.length,url};
-}
-
-async function makeConcatList(files:string[],listFile:string) {
-  const lines=files.map(f=>`file '${f.replace(/'/g,"'\\''")}'`).join("\n");
-  await fs.writeFile(listFile,lines);
-}
-
-async function runFfmpeg(args:string[]) {
-  try { return await execFileAsync(await resolveFfmpeg(),args,{timeout:55000,maxBuffer:4*1024*1024}); }
-  catch(e:any) {
-    throw err("ffmpeg",e?.stderr || e?.message || "FFmpeg failed",{
-      code:e?.code,stdout:e?.stdout,stderr:e?.stderr,
-      hint:e?.code==="ENOENT" ? "No FFmpeg binary is available. Set FFMPEG_PATH to a runtime-provided FFmpeg binary." : undefined
-    });
-  }
-}
-
-async function makeVideo(images:string[],out:string) {
-  const dir=path.dirname(out), list=path.join(dir,"concat.txt");
-  const normalized:string[]=[];
-  for(let i=0;i<images.length;i++){
-    const f=path.join(dir,`scene-${i}.jpg`);
-    await runFfmpeg(["-y","-i",images[i],"-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920","-q:v","3",f]);
-    normalized.push(f);
-  }
-  await makeConcatList(normalized,list);
-  await runFfmpeg(["-y","-f","concat","-safe","0","-i",list,"-vf","format=yuv420p","-c:v","libx264","-preset","veryfast","-r","30","-t","21",out]);
-  const stat=await fs.stat(out);
-  if(stat.size<1000) throw err("ffmpeg","FFmpeg produced an empty/invalid MP4",{bytes:stat.size});
-  return {file:out,bytes:stat.size};
-}
-
-async function makeSilentAudioVideo(video:string,out:string) {
-  await runFfmpeg(["-y","-i",video,"-f","lavfi","-i","anullsrc=r=48000:cl=stereo","-shortest","-c:v","copy","-c:a","aac","-b:a","128k",out]);
-  return out;
+function err(stage:string, message:string, extra:Record<string,unknown> = {}) {
+  const e = new Error(message) as Error & { stage?:string; details?:unknown };
+  e.stage = stage;
+  e.details = extra;
+  return e;
 }
 
 export async function renderContent(input:RenderInput) {
-  const root=await fs.mkdtemp(path.join(os.tmpdir(),"rapsometeddy-media-"));
-  const traceId=createHash("sha256").update(root+Date.now()).digest("hex").slice(0,12);
-  const images:string[]=[]; const stages:any[]=[];
+  const traceId = createHash("sha256")
+    .update(String(input.prompt) + ":" + Date.now() + ":" + Math.random())
+    .digest("hex")
+    .slice(0, 12);
+
+  const stages:any[] = [
+    { stage:"renderer-dispatch", status:"started" }
+  ];
+
+  const workerUrl = process.env.MEDIA_RENDERER_URL;
+  if (!workerUrl) {
+    throw err("renderer-dispatch", "MEDIA_RENDERER_URL service binding is missing", {
+      hint:"Deploy the Vercel Services configuration so the renderer binding is injected."
+    });
+  }
+
+  if (!input.telegramChatId) {
+    throw err("renderer-dispatch", "telegramChatId is required for the Telegram media delivery path");
+  }
+
   try {
-    stages.push({stage:"scene-generation",status:"started"});
-    for(let i=0;i<7;i++) {
-      const result=await fetchImage(scenePrompts(input.prompt)[i],path.join(root,`raw-${i}.png`));
-      images.push(result.file);
-    }
-    stages[0]={stage:"scene-generation",status:"ok",count:7};
+    const url = new URL("/render", workerUrl);
+    const headers:Record<string,string> = {
+      "content-type":"application/json"
+    };
 
-    stages.push({stage:"background-renderer",status:"started"});
-    const video=path.join(root,"visuals.mp4");
-    await makeVideo(images,video);
-    stages[1]={stage:"background-renderer",status:"ok"};
-
-    stages.push({stage:"ffmpeg",status:"started"});
-    const final=path.join(root,"final.mp4");
-    try {
-      await makeSilentAudioVideo(video,final);
-      stages[2]={stage:"ffmpeg",status:"ok",audio:"silent-diagnostic"};
-    } catch(e:any) {
-      stages[2]={stage:"ffmpeg",status:"failed",error:{stage:e.stage,message:e.message,details:e.details}};
-      throw e;
+    if (process.env.RENDER_WORKER_SECRET) {
+      headers["x-render-secret"] = process.env.RENDER_WORKER_SECRET;
     }
 
-    return {traceId,finalPath:final,stages,voiceover:{status:"not-requested",note:"Pipeline reports audio errors instead of silently falling back."}};
-  } catch(e:any) {
-    console.error("[MEDIA_PIPELINE]",JSON.stringify({traceId,stage:e.stage||"unknown",message:e.message,details:e.details,stages}));
+    const response = await fetch(url, {
+      method:"POST",
+      headers,
+      body:JSON.stringify({
+        prompt:input.prompt,
+        telegramChatId:input.telegramChatId
+      }),
+      signal:AbortSignal.timeout(58_000)
+    });
+
+    const raw = await response.text();
+    let result:any = null;
+    try { result = JSON.parse(raw); } catch {}
+
+    if (!response.ok || !result?.ok) {
+      stages[0] = {
+        stage:"renderer-dispatch",
+        status:"failed",
+        error:{
+          stage:"renderer",
+          message:result?.error || raw.slice(0, 1500) || "Renderer returned an error",
+          code:result?.code || null
+        }
+      };
+      throw err(
+        "renderer",
+        result?.error || raw.slice(0, 1500) || "Renderer returned an error",
+        { status:response.status, workerUrl:String(url), traceId }
+      );
+    }
+
+    stages[0] = {
+      stage:"renderer-dispatch",
+      status:"ok",
+      renderer:"vercel-container",
+      bytes:result.bytes || null,
+      telegramMessageId:result.telegramMessageId || null
+    };
+
+    return {
+      ok:true,
+      traceId,
+      status:"rendered-and-sent",
+      message:"The FFmpeg container rendered the 9:16 MP4 and sent it directly to Telegram.",
+      stages,
+      voiceover:{
+        status:"not-requested",
+        note:"The current worker renders the visual slideshow with diagnostic silent audio."
+      }
+    };
+  } catch (e:any) {
+    console.error("[MEDIA_PIPELINE]", JSON.stringify({
+      traceId,
+      stage:e.stage || "renderer",
+      message:e.message,
+      details:e.details,
+      stages
+    }));
     throw e;
   }
 }
