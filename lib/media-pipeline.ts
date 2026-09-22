@@ -4,9 +4,9 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 
 const execFileAsync = promisify(execFile);
+const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 const POLL = "https://gen.pollinations.ai/image/";
 
 type RenderInput={prompt:string;voice?:string;webhook?:string};
@@ -38,15 +38,17 @@ async function makeConcatList(files:string[],listFile:string) {
 }
 
 async function runFfmpeg(args:string[]) {
-  try { return await execFileAsync(ffmpegPath.path,args,{timeout:55000,maxBuffer:4*1024*1024}); }
+  try { return await execFileAsync(FFMPEG,args,{timeout:55000,maxBuffer:4*1024*1024}); }
   catch(e:any) {
-    throw err("ffmpeg",e?.stderr || e?.message || "FFmpeg failed",{code:e?.code,stdout:e?.stdout,stderr:e?.stderr});
+    throw err("ffmpeg",e?.stderr || e?.message || "FFmpeg failed",{
+      code:e?.code,stdout:e?.stdout,stderr:e?.stderr,
+      hint:e?.code==="ENOENT" ? "No FFmpeg binary is available. Set FFMPEG_PATH to a runtime-provided FFmpeg binary." : undefined
+    });
   }
 }
 
 async function makeVideo(images:string[],out:string) {
   const dir=path.dirname(out), list=path.join(dir,"concat.txt");
-  // Give each still 3 seconds, scale/crop to 1080x1920, encode H.264.
   const normalized:string[]=[];
   for(let i=0;i<images.length;i++){
     const f=path.join(dir,`scene-${i}.jpg`);
@@ -61,7 +63,6 @@ async function makeVideo(images:string[],out:string) {
 }
 
 async function makeSilentAudioVideo(video:string,out:string) {
-  // Explicitly retained as a diagnostic fallback: never presented as successful voiceover.
   await runFfmpeg(["-y","-i",video,"-f","lavfi","-i","anullsrc=r=48000:cl=stereo","-shortest","-c:v","copy","-c:a","aac","-b:a","128k",out]);
   return out;
 }
@@ -84,7 +85,7 @@ export async function renderContent(input:RenderInput) {
     stages[1]={stage:"background-renderer",status:"ok"};
 
     stages.push({stage:"ffmpeg",status:"started"});
-    let final=path.join(root,"final.mp4");
+    const final=path.join(root,"final.mp4");
     try {
       await makeSilentAudioVideo(video,final);
       stages[2]={stage:"ffmpeg",status:"ok",audio:"silent-diagnostic"};
@@ -93,7 +94,7 @@ export async function renderContent(input:RenderInput) {
       throw e;
     }
 
-    return {traceId,finalPath:final,stages,voiceover:{status:"not-requested",note:"Pipeline now reports audio errors instead of silently falling back."}};
+    return {traceId,finalPath:final,stages,voiceover:{status:"not-requested",note:"Pipeline reports audio errors instead of silently falling back."}};
   } catch(e:any) {
     console.error("[MEDIA_PIPELINE]",JSON.stringify({traceId,stage:e.stage||"unknown",message:e.message,details:e.details,stages}));
     throw e;
