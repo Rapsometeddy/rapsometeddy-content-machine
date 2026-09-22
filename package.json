@@ -11,8 +11,6 @@
     "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "ffprobe-static": "^3.1.0",
     "node-fetch": "^3.3.2",
     "sharp": "^0.34.3"
   },
@@ -23,7 +21,6 @@
     "typescript": "^5.7.3"
   },
   "allowScripts": {
-    "@ffmpeg-installer/linux-x64": true,
     "sharp": true
   }
 }
