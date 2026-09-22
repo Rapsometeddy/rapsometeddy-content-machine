@@ -90,10 +90,7 @@ export async function renderContent(input:RenderInput) {
       status:"rendered-and-sent",
       message:"The FFmpeg container rendered the 9:16 MP4 and sent it directly to Telegram.",
       stages,
-      voiceover:{
-        status:"not-requested",
-        note:"The current worker renders the visual slideshow with diagnostic silent audio."
-      }
+      media:"images-only"
     };
   } catch (e:any) {
     console.error("[MEDIA_PIPELINE]", JSON.stringify({
