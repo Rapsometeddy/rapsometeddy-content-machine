@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       prompt: String(body.prompt || "Create a short motivational tech/business video for Rapsometeddy"),
       voice: body.voice ? String(body.voice) : undefined,
       webhook: body.webhook ? String(body.webhook) : undefined,
+      telegramChatId: body.telegramChatId ?? body.chatId
     });
     return NextResponse.json({ ok: true, elapsedMs: Date.now()-startedAt, ...result });
   } catch (error) {
