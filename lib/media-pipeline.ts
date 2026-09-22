@@ -4,9 +4,10 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
+import ffmpegPath from "ffmpeg-static";
 
 const execFileAsync = promisify(execFile);
-const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
+const FFMPEG = process.env.FFMPEG_PATH || ffmpegPath || "ffmpeg";
 const POLL = "https://gen.pollinations.ai/image/";
 const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY || process.env.POLLINATIONS_KEY || "";
 
