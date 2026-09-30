@@ -53,3 +53,6 @@ footer{display:flex;justify-content:space-between;gap:15px;color:#666d7c;font-si
 @media(max-width:800px){.site{padding-left:16px;padding-right:16px}.hero{grid-template-columns:1fr;gap:28px;padding-top:25px}.demo-grid,.how{grid-template-columns:1fr}.steps,.example-grid{grid-template-columns:1fr}.hero{padding-bottom:60px}}
 @media(max-width:520px){.site{padding:14px 12px 45px}.nav{padding-bottom:25px}.brand{font-size:.68rem}.brand-mark{width:31px;height:31px;flex-basis:31px}.nav-link{font-size:.72rem;padding:9px 11px}.hero-text{font-size:.96rem}.hero-actions{display:grid;grid-template-columns:1fr}.primary-link,.secondary-link{width:100%;text-align:center}.preview{border-radius:18px}.demo-form,.result-box{padding:16px}input,textarea{font-size:16px}footer{flex-direction:column}}
 .studio-glow{box-shadow:0 0 60px rgba(195,80,255,.12)}
+
+/* Rapsometeddy ecosystem visual polish */
+.brand-mark{position:relative;box-shadow:0 0 28px #b36cff55}.brand-mark:after{content:"♛";position:absolute;top:-8px;right:-4px;font-size:9px;color:#ead5ff}.preview,.demo-form,.result-box,.example,.cta{transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}.preview:hover,.demo-form:hover,.result-box:hover,.example:hover{border-color:#b36cff44;box-shadow:0 22px 65px #0007}
