@@ -11,8 +11,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const result = await renderContent({
       prompt: String(body.prompt || "Create a short motivational tech/business video for Rapsometeddy"),
-      voice: body.voice ? String(body.voice) : undefined,
-      webhook: body.webhook ? String(body.webhook) : undefined,
       telegramChatId: body.telegramChatId ?? body.chatId
     });
     return NextResponse.json({ ok: true, elapsedMs: Date.now()-startedAt, ...result });
