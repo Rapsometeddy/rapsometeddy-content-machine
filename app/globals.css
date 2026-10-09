@@ -56,3 +56,25 @@ footer{display:flex;justify-content:space-between;gap:15px;color:#666d7c;font-si
 
 /* Rapsometeddy ecosystem visual polish */
 .brand-mark{position:relative;box-shadow:0 0 28px #b36cff55}.brand-mark:after{content:"♛";position:absolute;top:-8px;right:-4px;font-size:9px;color:#ead5ff}.preview,.demo-form,.result-box,.example,.cta{transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}.preview:hover,.demo-form:hover,.result-box:hover,.example:hover{border-color:#b36cff44;box-shadow:0 22px 65px #0007}
+
+/* Rapsometeddy shared design-system layer — additive, preserving the app's existing layout. */
+:root{--rt-bg:#09070f;--rt-surface:#120d1b;--rt-surface-raised:#1a1227;--rt-purple:#8b5cf6;--rt-purple-strong:#7c3aed;--rt-lavender:#c4b5fd;--rt-text:#f7f4ff;--rt-muted:#a7a0b5;--rt-line:#352447;--rt-focus:#ddd6fe}
+:focus-visible{outline:3px solid var(--rt-focus);outline-offset:3px}
+button,a,input,textarea,select{touch-action:manipulation}
+button,a{ -webkit-tap-highlight-color:transparent}
+button:disabled{opacity:.58;cursor:not-allowed}
+::selection{background:#8b5cf688;color:#fff}
+@media(max-width:600px){
+ .site{padding:14px 16px 44px}
+ .nav{padding-bottom:20px;align-items:flex-start;flex-wrap:wrap}
+ .brand{letter-spacing:.08em}
+ .nav-link{min-height:44px}
+ .hero{grid-template-columns:minmax(0,1fr);gap:26px;padding:24px 0 48px}
+ .hero-actions>*{min-height:46px}
+ .demo-grid{grid-template-columns:minmax(0,1fr)}
+ .promo-image{min-height:220px}
+}
+@media(prefers-reduced-motion:reduce){
+ html{scroll-behavior:auto}
+ *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
