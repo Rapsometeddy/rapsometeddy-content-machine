@@ -38,6 +38,7 @@ export default function Home() {
     <main className="site">
       <nav className="nav">
         <div className="brand"><span className="brand-mark">R</span><span>RAPSOMETTEDY</span></div>
+        <a className="nav-link" href="/clip-factory">Clip Factory ♛</a>
         <a className="nav-link" href="https://t.me/RapsometeddyHQBot" target="_blank" rel="noreferrer">Try on Telegram ↗</a>
       </nav>
 
