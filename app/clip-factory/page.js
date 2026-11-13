@@ -44,6 +44,7 @@ export default function ClipFactoryPage() {
   const [permission, setPermission] = useState(false);
   const [permissionNote, setPermissionNote] = useState("");
   const [queue, setQueue] = useState([]);
+  const [hydrated, setHydrated] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState("pending");
 
@@ -53,13 +54,16 @@ export default function ClipFactoryPage() {
       if (saved) setQueue(JSON.parse(saved));
     } catch {
       setMessage("Saved queue could not be read on this device.");
+    } finally {
+      setHydrated(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(queue)); }
     catch { setMessage("This device could not save the queue. Export your work as a backup."); }
-  }, [queue]);
+  }, [queue, hydrated]);
 
   const visible = useMemo(() => queue.filter(item => filter === "all" || item.status === filter), [queue, filter]);
   const pendingCount = queue.filter(item => item.status === "pending").length;
@@ -153,7 +157,7 @@ export default function ClipFactoryPage() {
         <div className="clip-section-heading"><div><p className="clip-eyebrow">03 · HUMAN REVIEW</p><h2>Your clip approval queue</h2></div><button className="clip-export" onClick={exportQueue} disabled={!queue.length}>Export backup ↓</button></div>
         <div className="clip-filters">{["pending", "approved", "rejected", "all"].map(value => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}</button>)}</div>
         {!visible.length ? <div className="clip-empty"><span>♛</span><b>No {filter === "all" ? "" : filter} clips yet</b><p>Authorised transcript moments will appear here for review.</p></div> : <div className="clip-cards">{visible.map(item => <article className="clip-card" key={item.id}>
-          <div className="clip-card-top"><span className="clip-time">{item.time}</span><span className={"clip-status " + item.status}>{item.status}</span><span className="clip-score">Signal {item.score}/9</span></div>
+          <div className="clip-card-top"><span className="clip-time">{item.time}</span><span className={"clip-status " + item.status}>{item.status}</span><span className="clip-score">Signal {item.score}/10</span></div>
           <h3>{item.hook}</h3><p>{item.transcript}</p>
           <div className="clip-source"><span>{item.creator} · {item.category}</span><a href={item.sourceUrl} target="_blank" rel="noreferrer">Original video ↗</a></div>
           <small className="clip-permission">Rights record: {item.permissionNote}</small>
